@@ -17,12 +17,16 @@ public class MainActivity extends AppCompatActivity implements CameraCapture.Pre
     private Button mSwitchCamera;
 
     private CameraCapture mCameraCapture;
-
+    private int mFilter = TextureRender.FILTER_NONE;
     @Override
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.switchCamera:
                 mCameraCapture.switchCamera();
+                break;
+            case R.id.filter:
+                mFilter = 1 - mFilter;
+                mCameraCapture.setFilter(mFilter);
                 break;
         }
     }
@@ -42,6 +46,7 @@ public class MainActivity extends AppCompatActivity implements CameraCapture.Pre
 
         mSwitchCamera = findViewById(R.id.switchCamera);
         mSwitchCamera.setOnClickListener(this);
+        findViewById(R.id.filter).setOnClickListener(this);
     }
 
     /**

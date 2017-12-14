@@ -38,6 +38,22 @@ public class CameraCapture implements GLSurfaceView.Renderer {
     private int targetHeight = 1280;
     private TextureRender mGLRender;
 
+    public void setFilter(final int filter) {
+        mGlSurfaceView.queueEvent(new Runnable() {
+            @Override
+            public void run() {
+                switch (filter) {
+                    case TextureRender.FILTER_NONE:
+                        mGLRender.changeFragmentShader(TextureRender.FRAGMENT_SHADER);
+                        break;
+                    case TextureRender.FILTER_BW:
+                        mGLRender.changeFragmentShader(TextureRender.FRAGMENT_SHADER_BW);
+                        break;
+                }
+            }
+        });
+    }
+
     public interface SurfaceTextureCallback {
         void onSurfaceCreated(int texWidth, int texHeight);
 
@@ -196,7 +212,7 @@ public class CameraCapture implements GLSurfaceView.Renderer {
 
         mCameraRotation = info.orientation;
         if (mGLRender != null)
-            mGLRender.adjustTextureBuffer(mCameraRotation, true, mCameraID == Camera.CameraInfo.CAMERA_FACING_FRONT);
+            mGLRender.adjustTextureBuffer(mCameraRotation, mCameraID == Camera.CameraInfo.CAMERA_FACING_FRONT, mCameraID == Camera.CameraInfo.CAMERA_FACING_FRONT);
     }
 
     public void setCameraDisplayOrientation(Camera camera) {
@@ -298,7 +314,7 @@ public class CameraCapture implements GLSurfaceView.Renderer {
         if (mSurfaceTextureCallback != null)
             mSurfaceTextureCallback.onSurfaceCreated(mImageWidth, mImageHeight);
 
-        mGLRender.adjustTextureBuffer(mCameraRotation, true, mCameraID == Camera.CameraInfo.CAMERA_FACING_FRONT);
+        mGLRender.adjustTextureBuffer(mCameraRotation, mCameraID == Camera.CameraInfo.CAMERA_FACING_FRONT, mCameraID == Camera.CameraInfo.CAMERA_FACING_FRONT);
         mGLRender.calculateVertexBuffer(mSurfaceWidth, mSurfaceHeight, mImageWidth, mImageHeight);
     }
 

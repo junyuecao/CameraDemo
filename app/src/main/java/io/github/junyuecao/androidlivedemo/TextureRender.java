@@ -39,15 +39,9 @@ class TextureRender {
     private static final int TRIANGLE_VERTICES_DATA_STRIDE_BYTES = 5 * FLOAT_SIZE_BYTES;
     private static final int TRIANGLE_VERTICES_DATA_POS_OFFSET = 0;
     private static final int TRIANGLE_VERTICES_DATA_UV_OFFSET = 3;
-    private final float[] mTriangleVerticesData = {
-            // X, Y, Z, U, V
-            -1.0f, -1.0f, 0, 0.f, 0.f,
-            1.0f, -1.0f, 0, 1.f, 0.f,
-            -1.0f,  1.0f, 0, 0.f, 1.f,
-            1.0f,  1.0f, 0, 1.f, 1.f,
-    };
-    private FloatBuffer mTriangleVertices;
-    private static final String VERTEX_SHADER =
+    public static final int FILTER_NONE = 0;
+    public static final int FILTER_BW = 1;
+    public static final String VERTEX_SHADER =
             "uniform mat4 uMVPMatrix;\n" +
                     "uniform mat4 uSTMatrix;\n" +
                     "attribute vec4 aPosition;\n" +
@@ -57,13 +51,23 @@ class TextureRender {
                     "  gl_Position = uMVPMatrix * aPosition;\n" +
                     "  vTextureCoord = (uSTMatrix * aTextureCoord).xy;\n" +
                     "}\n";
-    private static final String FRAGMENT_SHADER =
+    public static final String FRAGMENT_SHADER =
             "#extension GL_OES_EGL_image_external : require\n" +
                     "precision mediump float;\n" +      // highp here doesn't seem to matter
                     "varying vec2 vTextureCoord;\n" +
                     "uniform samplerExternalOES sTexture;\n" +
                     "void main() {\n" +
-                    "  gl_FragColor = texture2D(sTexture, vTextureCoord);\n" +
+                    "  gl_FragColor = texture2D(sTexture, vTextureCoord);" +
+                    "}\n";
+    public static final String FRAGMENT_SHADER_BW =
+            "#extension GL_OES_EGL_image_external : require\n" +
+                    "precision mediump float;\n" +      // highp here doesn't seem to matter
+                    "varying vec2 vTextureCoord;\n" +
+                    "uniform samplerExternalOES sTexture;\n" +
+                    "void main() {\n" +
+                    "  vec4 tc = texture2D(sTexture, vTextureCoord);" +
+                    "  float color = tc.r * 0.3 + tc.g * 0.59 + tc.b * 0.11;\n" +
+                    "  gl_FragColor = vec4(color, color, color, 1.0);" +
                     "}\n";
     private float[] mMVPMatrix = new float[16];
     private float[] mSTMatrix = new float[16];
@@ -78,10 +82,6 @@ class TextureRender {
 
 
     public TextureRender() {
-        mTriangleVertices = ByteBuffer.allocateDirect(
-                mTriangleVerticesData.length * FLOAT_SIZE_BYTES)
-                .order(ByteOrder.nativeOrder()).asFloatBuffer();
-        mTriangleVertices.put(mTriangleVerticesData).position(0);
         Matrix.setIdentityM(mSTMatrix, 0);
     }
     public int getTextureId() {
@@ -89,6 +89,10 @@ class TextureRender {
     }
     public void drawFrame(SurfaceTexture st) {
         checkGlError("onDrawFrame start");
+        if (mProgram == 0) {
+            // Program not available ，wait for next frame
+            return;
+        }
         st.getTransformMatrix(mSTMatrix);
         GLES20.glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
@@ -96,13 +100,11 @@ class TextureRender {
         checkGlError("glUseProgram");
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, mTextureID);
-        mTriangleVertices.position(TRIANGLE_VERTICES_DATA_POS_OFFSET);
         GLES20.glVertexAttribPointer(maPositionHandle, 3, GLES20.GL_FLOAT, false,
                 3 * FLOAT_SIZE_BYTES, mVertexBuffer);
         checkGlError("glVertexAttribPointer maPosition");
         GLES20.glEnableVertexAttribArray(maPositionHandle);
         checkGlError("glEnableVertexAttribArray maPositionHandle");
-        mTriangleVertices.position(TRIANGLE_VERTICES_DATA_UV_OFFSET);
         GLES20.glVertexAttribPointer(maTextureHandle, 2, GLES20.GL_FLOAT, false,
                 2 * FLOAT_SIZE_BYTES, mTextureBuffer);
         checkGlError("glVertexAttribPointer maTextureHandle");
@@ -162,8 +164,12 @@ class TextureRender {
      * Replaces the fragment shader.
      */
     public void changeFragmentShader(String fragmentShader) {
-        throw new UnsupportedOperationException("Not implemented");
+        if (mProgram > 0) {
+            GLES20.glDeleteProgram(mProgram);
+        }
+        mProgram = createProgram(VERTEX_SHADER, fragmentShader);
     }
+
     private int loadShader(int shaderType, String source) {
         int shader = GLES20.glCreateShader(shaderType);
         checkGlError("glCreateShader type=" + shaderType);
@@ -206,6 +212,8 @@ class TextureRender {
             GLES20.glDeleteProgram(program);
             program = 0;
         }
+        GLES20.glDeleteShader(vertexShader);
+        GLES20.glDeleteShader(pixelShader);
         return program;
     }
     public void checkGlError(String op) {
